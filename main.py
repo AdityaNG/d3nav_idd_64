@@ -16,7 +16,7 @@ import argparse
 TIMESTAMP = "2023-05-15T00-00-00"
 parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size',
-                    default=4,
+                    default=12,
                     type=int,
                     help='mini-batch size')
 parser.add_argument('-lr', default=1e-4, type=float, help='learning rate')
