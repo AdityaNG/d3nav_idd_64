@@ -16,7 +16,7 @@ import argparse
 TIMESTAMP = "2023-05-15T00-00-00"
 parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size',
-                    default=1,
+                    default=4,
                     type=int,
                     help='mini-batch size')
 parser.add_argument('-lr', default=1e-4, type=float, help='learning rate')
@@ -31,7 +31,7 @@ parser.add_argument('-frames_output',
 parser.add_argument('-epochs', default=100, type=int, help='sum of epochs')
 parser.add_argument('--video_path', 
                     type=str,
-                    default=r"C:\Users\YASHAS\capstone\baselines\conv_idd_64\idd_temporal_train_4",
+                    default="/media/NG/datasets/idd/idd_temporal_train_3",
                     help='Path to the input video file or extracted frames directory')
 parser.add_argument('--motion_threshold',
                     default=0.1,

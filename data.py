@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import random
 import glob
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 class IDDTemporalDataset(data.Dataset):
     def __init__(self, sequence_folders, n_frames_input=2, n_frames_output=1, 
@@ -83,7 +84,7 @@ class IDDTemporalDataset(data.Dataset):
         """Process all sequence folders and identify valid frames with motion"""
         sequences = []
         
-        for seq_folder in self.sequence_folders:
+        for seq_folder in tqdm(self.sequence_folders, desc="process_sequences"):
             # Extract category and sequence IDs from folder path
             parts = seq_folder.split(os.sep)
             category_id = parts[-2]  # e.g., "00163"
@@ -104,7 +105,8 @@ class IDDTemporalDataset(data.Dataset):
                         'name': f"{category_id}_{sequence_id}"
                     })
                 else:
-                    print(f"Skipping sequence {seq_folder} due to insufficient motion")
+                    # print(f"Skipping sequence {seq_folder} due to insufficient motion")
+                    pass
             else:
                 print(f"Warning: Skipping sequence {seq_folder} with only {len(frame_files)} frames (need {self.n_frames_total})")
         
