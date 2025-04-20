@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 from model import D3NavIDD  # Import the new model
 from data import create_idd_datasets
 import torch
@@ -16,7 +16,7 @@ import argparse
 TIMESTAMP = "2023-05-15T00-00-00"
 parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size',
-                    default=12,
+                    default=24,
                     type=int,
                     help='mini-batch size')
 parser.add_argument('-lr', default=1e-4, type=float, help='learning rate')
@@ -28,7 +28,7 @@ parser.add_argument('-frames_output',
                     default=1,
                     type=int,
                     help='sum of predict frames')
-parser.add_argument('-epochs', default=100, type=int, help='sum of epochs')
+parser.add_argument('-epochs', default=30, type=int, help='sum of epochs')
 parser.add_argument('--video_path', 
                     type=str,
                     default="/media/NG/datasets/idd/idd_temporal_train_3",
@@ -38,9 +38,13 @@ parser.add_argument('--motion_threshold',
                     type=float,
                     help='Threshold for motion detection (fraction of pixels that must change)')
 parser.add_argument('--unfrozen_layers',
-                    default=3,
+                    default=6,
                     type=int,
                     help='Number of GPT layers to unfreeze for training')
+parser.add_argument('--num_layers',
+                    default=6,
+                    type=int,
+                    help='Number of GPT layers')
 parser.add_argument('--target_size',
                     default=128,
                     type=int,
@@ -95,7 +99,8 @@ def train():
     # Initialize D3NavIDD model
     net = D3NavIDD(
         temporal_context=args.frames_input,
-        num_unfrozen_layers=args.unfrozen_layers
+        num_unfrozen_layers=args.unfrozen_layers,
+        num_layers=args.num_layers,
     )
     
     run_dir = './runs/' + TIMESTAMP

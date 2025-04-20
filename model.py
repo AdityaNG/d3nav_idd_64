@@ -1,19 +1,28 @@
 from typing import Optional
 import torch
 import torch.nn as nn
-from d3nav.model.d3nav import D3Nav
+from d3nav.model.d3nav import D3Nav, GPTConfig, GPT, DEFAULT_DATATYPE
 
 class D3NavIDD(D3Nav):
 
     def __init__(
         self,
         temporal_context: int = 2,        # num frames input
-        num_unfrozen_layers: int = 3,     # num GPT layers unfrozen
+        num_unfrozen_layers: int = 6,     # num GPT layers unfrozen
+        num_layers: int = 6,     # num GPT layers unfrozen
     ):
         super(D3NavIDD, self).__init__(
             load_comma=True,
             temporal_context=temporal_context,
         )
+
+        # Fresh Backbone, overwriting the previous backbone
+        self.config_gpt = GPTConfig(
+            n_layer=num_layers,
+        )
+        model = GPT(self.config_gpt)
+
+        self.model = model.to(dtype=DEFAULT_DATATYPE)
 
         # Freeze the entire model initially
         self.freeze_vqvae()
@@ -90,8 +99,11 @@ class D3NavIDD(D3Nav):
         )
         
         # Remove BOS token if needed
-        zp = zp_batch[:, 1:] if zp_batch.size(1) == self.config_gpt.tokens_per_frame else zp_batch
+        # zp = zp_batch[:, 1:] if zp_batch.size(1) == self.config_gpt.tokens_per_frame else zp_batch
+        zp = zp_batch[:, 1:]
         zp = zp.to(dtype=torch.int64)
+
+        zp = torch.clamp(zp, min=0, max=1023)
         
         # Decode the predicted tokens
         xp, z_feat = self.decoder(zp, return_feats=True)
@@ -111,7 +123,7 @@ class D3NavIDD(D3Nav):
             yz = yz.reshape(B*1*128)
 
             # zp_probs_batch: (B, 1, 129, 1025)
-            zp_probs_batch = zp_probs_batch[:,:,:128,:]
+            zp_probs_batch = zp_probs_batch[:,:,1:,:]
             # zp_probs_batch: (B, 1, 128, 1025)
 
             zp_probs = zp_probs_batch.reshape(B*1*128, -1)
@@ -121,9 +133,9 @@ class D3NavIDD(D3Nav):
                 zp_probs,
                 yz,
             )
-            
+
             return xp, ygt, loss
-        
+
         return xp
     
     def batch_generate(self, prompt: torch.Tensor, max_new_tokens: int):

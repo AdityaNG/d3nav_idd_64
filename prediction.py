@@ -19,7 +19,7 @@ model = D3NavIDD(
 
 # Load the checkpoint (update this path to your new checkpoint)
 # checkpoint_path = r'C:\Users\YASHAS\capstone\conv_idd_64\save_model\2023-05-15T00-00-00\checkpoint_best.pth.tar'
-checkpoint_path = "save_model/2023-05-15T00-00-00/checkpoint_0_6.931597.pth.tar"
+checkpoint_path = "save_model/2023-05-15T00-00-00/checkpoint_1_0.288700.pth.tar"
 checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu') if not torch.cuda.is_available() else None)
 
 # Load the model state dict
@@ -34,7 +34,7 @@ model.eval()
 
 # Prepare the data
 # dataset_root = r'C:\Users\YASHAS\capstone\baselines\conv_idd_64\idd_temporal_train_4'  # Path to the dataset root folder
-dataset_root = "/media/NG/datasets/idd_mini/"  # Path to the dataset root folder
+dataset_root = "/media/NG/datasets/idd/idd_temporal_train_3"  # Path to the dataset root folder
 
 _, val_dataset = create_idd_datasets(
     dataset_root=dataset_root,
