@@ -92,55 +92,92 @@ class D3NavIDD(D3Nav):
         # Reshape for processing
         z_flat = z.reshape(B, T * self.config_gpt.tokens_per_frame)
         
-        # Generate the next frame's tokens for all batches in parallel
-        zp_batch, zp_probs_batch = self.batch_generate(
-            z_flat, 
-            self.config_gpt.tokens_per_frame
-        )
-        
-        # Remove BOS token if needed
-        # zp = zp_batch[:, 1:] if zp_batch.size(1) == self.config_gpt.tokens_per_frame else zp_batch
-        zp = zp_batch[:, 1:]
-        zp = zp.to(dtype=torch.int64)
-
-        zp = torch.clamp(zp, min=0, max=1023)
-        
-        # Decode the predicted tokens
-        xp, z_feat = self.decoder(zp, return_feats=True)
-        xp = xp.reshape(B, 1, C, H, W)
-        
         if train_mode:
+            # TEACHER FORCING: Use ground truth tokens for training
             # Process ground truth for loss calculation
             y = y.reshape(B * 1, C, H, W)
-            # y: (B*1, 3, 128, 256)
-
-            yz = self.encoder(y)
-            # yz: (B*1, 128)
-
+            yz = self.encoder(y)  # (B*1, 128)
             ygt = self.decoder(yz)
             ygt = ygt.view(B, 1, C, H, W)
-
-            yz = yz.reshape(B*1*128)
-
-            # zp_probs_batch: (B, 1, 129, 1025)
-            zp_probs_batch = zp_probs_batch[:,:,1:,:]
-            # zp_probs_batch: (B, 1, 128, 1025)
-
-            zp_probs = zp_probs_batch.reshape(B*1*128, -1)
-            # zp_probs_batch: (B*1*128, 1025)
-
-            # zp_probs comes out of a softmax layer
-            # zp_probs: torch.Size([128, 1025]) torch.float32 range(5.2041e-05), 0.0111)
-            # yz: torch.Size([128]) torch.int64 range(3, 1025)
-
-            loss = torch.nn.functional.cross_entropy(
-                zp_probs,
-                yz,
+            
+            # Get loss using teacher forcing
+            xp, loss = self._teacher_forcing_forward(z_flat, yz)
+            
+            return xp.reshape(B, 1, C, H, W), ygt, loss
+        else:
+            # For inference, use autoregressive generation
+            zp_batch, _ = self.batch_generate(
+                z_flat, 
+                self.config_gpt.tokens_per_frame
             )
-
-            return xp, ygt, loss
-
-        return xp
+            
+            # Remove BOS token
+            zp = zp_batch[:, 1:]
+            zp = zp.to(dtype=torch.int64)
+            zp = torch.clamp(zp, min=0, max=1023)
+            
+            # Decode the predicted tokens
+            xp, _ = self.decoder(zp, return_feats=True)
+            return xp.reshape(B, 1, C, H, W)
+    
+    def _teacher_forcing_forward(self, context_tokens, target_tokens):
+        """
+        Perform teacher forcing forward pass for training
+        
+        Args:
+            context_tokens: Context tokens from input frames (B, T*tokens_per_frame)
+            target_tokens: Target tokens from ground truth frame (B*1, tokens_per_frame)
+            
+        Returns:
+            Decoded output image and loss
+        """
+        B = context_tokens.size(0)
+        device = context_tokens.device
+        dtype = context_tokens.dtype
+        
+        # Reshape target tokens to (B, tokens_per_frame)
+        target_tokens = target_tokens.reshape(B, -1)
+        
+        # Add BOS token to the target sequence for prediction
+        target_with_bos = torch.cat([
+            torch.full((B, 1), self.config_gpt.bos_token, dtype=target_tokens.dtype, device=device),
+            target_tokens
+        ], dim=1)
+        
+        # Create position indices for the context and target tokens
+        context_len = context_tokens.size(1)
+        target_len = target_with_bos.size(1)
+        
+        # For teacher forcing, we feed all tokens at once but create attention masks
+        # that ensure each prediction only sees previous tokens
+        input_tokens = torch.cat([context_tokens, target_with_bos[:, :-1]], dim=1)
+        
+        # Position indices for the input
+        input_pos = torch.arange(0, context_len + target_len - 1, device=device).unsqueeze(0).repeat(B, 1)
+        
+        # Get predictions for all tokens at once
+        logits = self.model(input_tokens, input_pos)
+        
+        # We only care about predictions for the target sequence
+        target_logits = logits[:, context_len:, :]  # (B, target_len-1, vocab_size)
+        
+        # Flatten the logits and targets for cross-entropy loss
+        flat_logits = target_logits.reshape(-1, target_logits.size(-1))
+        flat_targets = target_tokens.reshape(-1)
+        
+        # Calculate cross-entropy loss
+        loss = torch.nn.functional.cross_entropy(flat_logits, flat_targets)
+        
+        # For returning the predicted image, get the most likely token at each position
+        pred_tokens = torch.argmax(target_logits, dim=-1)
+        
+        # Decode the predicted tokens
+        pred_tokens = pred_tokens.to(dtype=torch.int64)
+        pred_tokens = torch.clamp(pred_tokens, min=0, max=1023)
+        
+        xp, _ = self.decoder(pred_tokens, return_feats=True)
+        
+        return xp, loss
     
     def batch_generate(self, prompt: torch.Tensor, max_new_tokens: int):
         """

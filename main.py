@@ -103,8 +103,8 @@ class IDDDataModule(pl.LightningDataModule):
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', default=24, type=int, help='mini-batch size per GPU')
-    parser.add_argument('-lr', default=1e-4, type=float, help='learning rate')
+    parser.add_argument('--batch_size', default=16, type=int, help='mini-batch size per GPU')
+    parser.add_argument('-lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('-weight_decay', default=1e-5, type=float, help='weight decay for regularization')
     parser.add_argument('-frames_input', default=2, type=int, help='sum of input frames')
     parser.add_argument('-frames_output', default=1, type=int, help='sum of predict frames')
