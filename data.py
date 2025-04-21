@@ -1,3 +1,5 @@
+import pickle
+import hashlib
 import cv2
 import numpy as np
 import os
@@ -82,6 +84,26 @@ class IDDTemporalDataset(data.Dataset):
     
     def process_sequences(self):
         """Process all sequence folders and identify valid frames with motion"""
+        # Create cache directory if it doesn't exist
+        cache_dir = os.path.expanduser("~/.d3nav_data")
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # Create a cache ID based on sequence folders and motion threshold
+        sequence_hash = hashlib.md5(str(self.sequence_folders).encode()).hexdigest()
+        motion_threshold_str = str(self.motion_threshold)
+        cache_id = f"{sequence_hash}_{motion_threshold_str}"
+        cache_file = os.path.join(cache_dir, f"sequences_cache_{cache_id}.pkl")
+        
+        # Try to load from cache first
+        if os.path.exists(cache_file):
+            try:
+                print(f"Loading sequences from cache: {cache_file}")
+                with open(cache_file, 'rb') as f:
+                    return pickle.load(f)
+            except Exception as e:
+                print(f"Failed to load cache: {e}")
+        
+        # If cache doesn't exist or loading failed, process the sequences
         sequences = []
         
         for seq_folder in tqdm(self.sequence_folders, desc="process_sequences"):
@@ -111,8 +133,17 @@ class IDDTemporalDataset(data.Dataset):
                 print(f"Warning: Skipping sequence {seq_folder} with only {len(frame_files)} frames (need {self.n_frames_total})")
         
         print(f"Found {len(sequences)} valid sequences with {self.n_frames_total}+ frames and sufficient motion")
+        
+        # Save the results to cache
+        try:
+            with open(cache_file, 'wb') as f:
+                pickle.dump(sequences, f)
+            print(f"Cached sequences to: {cache_file}")
+        except Exception as e:
+            print(f"Failed to write cache: {e}")
+            
         return sequences
-    
+
     def create_index_mapping(self):
         """Create a mapping from dataset indices to (sequence_idx, frame_idx)"""
         index_mapping = []

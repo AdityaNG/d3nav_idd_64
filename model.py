@@ -26,10 +26,10 @@ class D3NavIDD(D3Nav):
 
         # Freeze the entire model initially
         self.freeze_vqvae()
-        self.freeze_gpt()
+        self.freeze_gpt(requires_grad=True)
         
         # Then unfreeze only the specified number of GPT layers
-        self.unfreeze_last_n_layers(num_unfrozen_layers)
+        # self.unfreeze_last_n_layers(num_unfrozen_layers)
     
     def quantize(self, x: torch.Tensor):
         """
@@ -128,6 +128,10 @@ class D3NavIDD(D3Nav):
 
             zp_probs = zp_probs_batch.reshape(B*1*128, -1)
             # zp_probs_batch: (B*1*128, 1025)
+
+            # zp_probs comes out of a softmax layer
+            # zp_probs: torch.Size([128, 1025]) torch.float32 range(5.2041e-05), 0.0111)
+            # yz: torch.Size([128]) torch.int64 range(3, 1025)
 
             loss = torch.nn.functional.cross_entropy(
                 zp_probs,
