@@ -53,7 +53,7 @@ class D3NavIDDLightningModule(pl.LightningModule):
         scheduler = {
             'scheduler': torch.optim.lr_scheduler.OneCycleLR(
                 optimizer,
-                max_lr=3e-4, 
+                max_lr=self.hparams.lr*3,
                 total_steps=self.trainer.estimated_stepping_batches,
                 pct_start=0.1  # Warmup for the first 10% of steps
             ),

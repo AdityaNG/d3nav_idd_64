@@ -4,26 +4,39 @@ from torch.utils.data import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 from data import create_idd_datasets
-from model import D3NavIDD  # Updated import for the new model
+from model import D3NavIDD
 
 # Define parameters for D3Nav model
 TARGET_SIZE = 128  # Height (D3Nav expects 128x256 images)
 TEMPORAL_CONTEXT = 2  # Number of input frames
 NUM_UNFROZEN_LAYERS = 3  # Number of unfrozen layers (not relevant for inference)
+NUM_LAYERS = 6  # Number of total layers in the model
 
 # Load the D3Nav model
 model = D3NavIDD(
     temporal_context=TEMPORAL_CONTEXT,
-    num_unfrozen_layers=NUM_UNFROZEN_LAYERS
+    num_unfrozen_layers=NUM_UNFROZEN_LAYERS,
+    num_layers=NUM_LAYERS
 )
 
-# Load the checkpoint (update this path to your new checkpoint)
-# checkpoint_path = r'C:\Users\YASHAS\capstone\conv_idd_64\save_model\2023-05-15T00-00-00\checkpoint_best.pth.tar'
-checkpoint_path = "save_model/2023-05-15T00-00-00/checkpoint_1_0.288700.pth.tar"
+# Load the checkpoint (update this path to your Lightning checkpoint)
+checkpoint_path = "save_model/2025-04-21T09-22-14/model-epoch=04-val_loss=6.928516.ckpt"
 checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu') if not torch.cuda.is_available() else None)
 
-# Load the model state dict
-model.load_state_dict(checkpoint['state_dict'])
+# The Lightning checkpoint has a different structure - it contains 'state_dict' with 'model.' prefix
+# We need to remove the 'model.' prefix from the keys
+state_dict = {}
+for key in checkpoint['state_dict']:
+    if key.startswith('model.'):
+        # Remove the 'model.' prefix
+        new_key = key[6:]  # Skip the first 6 characters ('model.')
+        state_dict[new_key] = checkpoint['state_dict'][key]
+    else:
+        # If there's no 'model.' prefix, keep as is
+        state_dict[key] = checkpoint['state_dict'][key]
+
+# Load the processed state dict into our model
+model.load_state_dict(state_dict)
 
 # Move the model to the appropriate device
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -33,7 +46,6 @@ model.to(device)
 model.eval()
 
 # Prepare the data
-# dataset_root = r'C:\Users\YASHAS\capstone\baselines\conv_idd_64\idd_temporal_train_4'  # Path to the dataset root folder
 dataset_root = "/media/NG/datasets/idd/idd_temporal_train_3"  # Path to the dataset root folder
 
 _, val_dataset = create_idd_datasets(
@@ -43,7 +55,8 @@ _, val_dataset = create_idd_datasets(
     frame_stride=5,
     target_size=TARGET_SIZE,  # D3Nav expects height=128, width=256
     train_split_ratio=0.8,
-    seed=None
+    seed=1996,  # Match the seed used in training
+    motion_threshold=0.1  # Match the motion threshold from training
 )
 
 validLoader = DataLoader(val_dataset, batch_size=4, shuffle=False)
@@ -51,6 +64,9 @@ validLoader = DataLoader(val_dataset, batch_size=4, shuffle=False)
 # Parameters for limiting predictions
 num_batches_to_process = 1  # Number of batches to process
 num_samples_per_batch = 1   # Number of samples per batch to process
+
+# Create a directory for saving prediction images
+os.makedirs('predictions', exist_ok=True)
 
 # Make predictions and display input vs predicted vs ground truth frames
 with torch.no_grad():
@@ -115,10 +131,11 @@ with torch.no_grad():
                          f'Row 3: Ground Truth Frame (11) | Row 4: Ground Truth Reconstruction',
                          fontsize=12)
             plt.tight_layout()
-            plt.savefig(f'prediction_batch{batch_idx}_sample{sample_idx}.png')
+            save_path = os.path.join('predictions', f'prediction_batch{batch_idx}_sample{sample_idx}.png')
+            plt.savefig(save_path)
             plt.show()
 
-            # Optional: Calculate and print metrics
+            # Calculate and print metrics
             # Mean Squared Error between prediction and ground truth
             mse = np.mean((pred[sample_idx, 0] - targets[sample_idx, 0])**2)
             print(f"MSE between prediction and ground truth: {mse:.6f}")
@@ -126,3 +143,8 @@ with torch.no_grad():
             # Mean Squared Error between ground truth reconstruction and ground truth
             mse_reconst = np.mean((gt_reconst[sample_idx, 0] - targets[sample_idx, 0])**2)
             print(f"MSE between GT reconstruction and ground truth: {mse_reconst:.6f}")
+            
+            # Calculate PSNR (Peak Signal-to-Noise Ratio)
+            max_pixel_value = 255.0
+            psnr = 10 * np.log10((max_pixel_value**2) / mse)
+            print(f"PSNR: {psnr:.2f} dB")
