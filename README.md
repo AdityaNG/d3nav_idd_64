@@ -47,6 +47,21 @@ You can customize the number of epochs and batch size as per your requirements b
   
 - It is recommended to use a checkpoint with the lowest validation loss for better predictions.
 
+Download checkpoint for D3NavIDD:
+```
+num_layers           = 24
+frames_input     = 2
+use_comma_gpt        = True
+attention_dropout_p  = 0.1
+gradient_clip_val    = 0.0
+batch_size           = 8x2 (2 GPUs, Batch Size per GPU 8)
+lr                   = 1e-5
+weight_decay         = 1e-4
+epochs               = 30
+```
+
+Checkpoint: https://drive.google.com/drive/u/0/folders/1sCRWw0AUpPQnCNkY0qRiHq71s01YM5Nx
+
 ## Generating Predictions
 
 To generate predictions, load the desired checkpoint and run:
