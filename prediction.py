@@ -9,18 +9,19 @@ from model import D3NavIDD
 # Define parameters for D3Nav model
 TARGET_SIZE = 128  # Height (D3Nav expects 128x256 images)
 TEMPORAL_CONTEXT = 2  # Number of input frames
-NUM_UNFROZEN_LAYERS = 3  # Number of unfrozen layers (not relevant for inference)
-NUM_LAYERS = 6  # Number of total layers in the model
+NUM_LAYERS = 24  # Number of total layers in the model
+USE_COMMA_GPT = True
 
 # Load the D3Nav model
 model = D3NavIDD(
     temporal_context=TEMPORAL_CONTEXT,
-    num_unfrozen_layers=NUM_UNFROZEN_LAYERS,
-    num_layers=NUM_LAYERS
+    num_layers=NUM_LAYERS,
+    use_comma_gpt=USE_COMMA_GPT,
+    attention_dropout_p=0.0,
 )
 
 # Load the checkpoint (update this path to your Lightning checkpoint)
-checkpoint_path = "save_model/2025-04-21T09-22-14/model-epoch=04-val_loss=6.928516.ckpt"
+checkpoint_path = "save_model/2025-04-23T11-27-12/model-epoch=02-val_loss=3.449869.ckpt"
 checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu') if not torch.cuda.is_available() else None)
 
 # The Lightning checkpoint has a different structure - it contains 'state_dict' with 'model.' prefix
@@ -62,8 +63,8 @@ _, val_dataset = create_idd_datasets(
 validLoader = DataLoader(val_dataset, batch_size=4, shuffle=False)
 
 # Parameters for limiting predictions
-num_batches_to_process = 1  # Number of batches to process
-num_samples_per_batch = 1   # Number of samples per batch to process
+num_batches_to_process = 128  # Number of batches to process
+num_samples_per_batch = 128   # Number of samples per batch to process
 
 # Create a directory for saving prediction images
 os.makedirs('predictions', exist_ok=True)
@@ -78,73 +79,71 @@ with torch.no_grad():
         targets = targetVar.to(device)  # Shape: [B, 1, 3, 128, 256]
 
         # Predict the next frame
-        # For inference we don't pass targets, but for visualization we include them
-        # to get the ground truth reconstruction
-        pred, gt_reconst, _ = model(inputs, targets)  
+        pred, _, _ = model(inputs, targets)  # We don't need gt_reconst anymore
 
         # Convert to NumPy
         inputs = inputs.cpu().numpy()
         targets = targets.cpu().numpy()
         pred = pred.cpu().numpy()
-        gt_reconst = gt_reconst.cpu().numpy()
 
         # Iterate over each sample in the batch
         for sample_idx in range(min(num_samples_per_batch, pred.shape[0])):
-            # Create a figure to display input, predicted, and ground truth frames
-            plt.figure(figsize=(15, 10))  # Adjusted size for multiple rows and frames
-
-            # Display the input frames (Row 1)
-            for i in range(inputs.shape[1]):  # Loop over input frames (2)
-                plt.subplot(4, 2, i + 1)  # 4 rows, 2 columns
-                frame = inputs[sample_idx, i, :, :, :]  # RGB frame (3 channels)
-                frame = np.clip(frame, 0, 255) / 255.0  # Normalize from 0-255 to 0-1
-                plt.imshow(frame.transpose(1, 2, 0))  # Transpose to (H, W, C)
-                plt.title(f'Input Frame {i * 5 + 1}')  # Frame 1, Frame 6 (stride 5)
-                plt.axis('off')
-
-            # Display the predicted frame (Row 2)
-            plt.subplot(4, 2, 3)  # Third row, first column
-            frame = pred[sample_idx, 0, :, :, :]  # Single predicted frame
+            # Create a figure to display input, predicted, and ground truth frames in a 2x2 grid
+            plt.figure(figsize=(12, 10))
+            
+            # Create a 2x2 grid layout
+            # Row 1: Input frames
+            # Row 2: Predicted frame and Ground Truth frame
+            
+            # Input Frame 1 (Top-Left)
+            plt.subplot(2, 2, 1)
+            frame = inputs[sample_idx, 0, :, :, :]  # First input frame
             frame = np.clip(frame, 0, 255) / 255.0  # Normalize from 0-255 to 0-1
             plt.imshow(frame.transpose(1, 2, 0))  # Transpose to (H, W, C)
-            plt.title('Predicted Frame 11')  # Frame 11 (5 frames after second input)
+            plt.title('Input Frame 1')
             plt.axis('off')
-
-            # Display the ground truth frame (Row 3)
-            plt.subplot(4, 2, 5)  # Third row, first column
-            frame = targets[sample_idx, 0, :, :, :]  # Single ground truth frame
+            
+            # Input Frame 6 (Top-Right)
+            plt.subplot(2, 2, 2)
+            frame = inputs[sample_idx, 1, :, :, :]  # Second input frame
             frame = np.clip(frame, 0, 255) / 255.0  # Normalize from 0-255 to 0-1
             plt.imshow(frame.transpose(1, 2, 0))  # Transpose to (H, W, C)
-            plt.title('Ground Truth Frame 11')  # Frame 11
+            plt.title('Input Frame 6')
             plt.axis('off')
-
-            # Display the ground truth reconstruction (Row 4)
-            plt.subplot(4, 2, 7)  # Fourth row, first column
-            frame = gt_reconst[sample_idx, 0, :, :, :]  # Ground truth reconstruction
+            
+            # Predicted Frame 11 (Bottom-Left)
+            plt.subplot(2, 2, 3)
+            frame = pred[sample_idx, 0, :, :, :]  # Predicted frame
             frame = np.clip(frame, 0, 255) / 255.0  # Normalize from 0-255 to 0-1
             plt.imshow(frame.transpose(1, 2, 0))  # Transpose to (H, W, C)
-            plt.title('GT Reconstruction (Encoded->Decoded)')  # Encoded then decoded ground truth
+            plt.title('Predicted Frame 11')
             plt.axis('off')
-
-            plt.suptitle(f'Batch {batch_idx}, Sample {sample_idx}\n'
-                         f'Row 1: Input Frames (1, 6) | Row 2: Predicted Frame (11)\n'
-                         f'Row 3: Ground Truth Frame (11) | Row 4: Ground Truth Reconstruction',
+            
+            # Ground Truth Frame 11 (Bottom-Right)
+            plt.subplot(2, 2, 4)
+            frame = targets[sample_idx, 0, :, :, :]  # Ground truth frame
+            frame = np.clip(frame, 0, 255) / 255.0  # Normalize from 0-255 to 0-1
+            plt.imshow(frame.transpose(1, 2, 0))  # Transpose to (H, W, C)
+            plt.title('Ground Truth Frame 11')
+            plt.axis('off')
+            
+            plt.suptitle(f'Row 1: Input Frames (1, 6) | Row 2: Predicted Frame (11), Ground Truth Frame (11)',
                          fontsize=12)
             plt.tight_layout()
             save_path = os.path.join('predictions', f'prediction_batch{batch_idx}_sample{sample_idx}.png')
             plt.savefig(save_path)
-            plt.show()
+            plt.close()  # Close the figure to save memory
+            
+            # Only show the first sample, then just save the rest
+            if batch_idx == 0 and sample_idx == 0:
+                plt.show()
 
             # Calculate and print metrics
             # Mean Squared Error between prediction and ground truth
             mse = np.mean((pred[sample_idx, 0] - targets[sample_idx, 0])**2)
-            print(f"MSE between prediction and ground truth: {mse:.6f}")
-            
-            # Mean Squared Error between ground truth reconstruction and ground truth
-            mse_reconst = np.mean((gt_reconst[sample_idx, 0] - targets[sample_idx, 0])**2)
-            print(f"MSE between GT reconstruction and ground truth: {mse_reconst:.6f}")
+            print(f"Batch {batch_idx}, Sample {sample_idx} - MSE: {mse:.6f}")
             
             # Calculate PSNR (Peak Signal-to-Noise Ratio)
             max_pixel_value = 255.0
             psnr = 10 * np.log10((max_pixel_value**2) / mse)
-            print(f"PSNR: {psnr:.2f} dB")
+            print(f"Batch {batch_idx}, Sample {sample_idx} - PSNR: {psnr:.2f} dB")

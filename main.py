@@ -24,7 +24,7 @@ class D3NavIDDLightningModule(pl.LightningModule):
         # Initialize model
         self.model = D3NavIDD(
             temporal_context=self.hparams.frames_input,
-            num_unfrozen_layers=self.hparams.unfrozen_layers,
+            use_comma_gpt=self.hparams.use_comma_gpt,
             num_layers=self.hparams.num_layers,
         )
     
@@ -103,9 +103,9 @@ class IDDDataModule(pl.LightningDataModule):
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', default=16, type=int, help='mini-batch size per GPU')
-    parser.add_argument('-lr', default=1e-3, type=float, help='learning rate')
-    parser.add_argument('-weight_decay', default=1e-5, type=float, help='weight decay for regularization')
+    parser.add_argument('--batch_size', default=8, type=int, help='mini-batch size per GPU')
+    parser.add_argument('-lr', default=1e-5, type=float, help='learning rate')
+    parser.add_argument('-weight_decay', default=1e-4, type=float, help='weight decay for regularization')
     parser.add_argument('-frames_input', default=2, type=int, help='sum of input frames')
     parser.add_argument('-frames_output', default=1, type=int, help='sum of predict frames')
     parser.add_argument('-epochs', default=30, type=int, help='sum of epochs')
@@ -113,16 +113,16 @@ def main():
                         help='Path to the input video file or extracted frames directory')
     parser.add_argument('--motion_threshold', default=0.1, type=float,
                         help='Threshold for motion detection (fraction of pixels that must change)')
-    parser.add_argument('--unfrozen_layers', default=6, type=int,
-                        help='Number of GPT layers to unfreeze for training')
-    parser.add_argument('--num_layers', default=6, type=int, help='Number of GPT layers')
+    parser.add_argument('--use_comma_gpt', default=True, type=bool,
+                        help='Use the comma GPT pretrained backbone')
+    parser.add_argument('--num_layers', default=24, type=int, help='Number of GPT layers')
     parser.add_argument('--target_size', default=128, type=int,
                         help='Image height (width will be 2x height)')
     parser.add_argument('--seed', default=1996, type=int, help='Random seed')
     parser.add_argument('--num_workers', default=4, type=int,
                         help='Number of workers for data loading')
     parser.add_argument('--precision', default='bf16-mixed', type=str,
-                        help='Precision for training (16, 32, 32-true, 64, bf16)')
+                        help='Precision for training (16, 32, 32-true, 64, bf16, bf16-mixed)')
     parser.add_argument('--num_nodes', default=1, type=int,
                         help='Number of nodes for distributed training')
     parser.add_argument('--devices', default=-1, type=int,

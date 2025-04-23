@@ -8,28 +8,30 @@ class D3NavIDD(D3Nav):
     def __init__(
         self,
         temporal_context: int = 2,        # num frames input
-        num_unfrozen_layers: int = 6,     # num GPT layers unfrozen
-        num_layers: int = 6,     # num GPT layers unfrozen
+        num_layers: int = 24,             # num GPT layers unfrozen
+        use_comma_gpt: bool = True,
+        attention_dropout_p: float = 0.1,
     ):
         super(D3NavIDD, self).__init__(
             load_comma=True,
             temporal_context=temporal_context,
+            attention_dropout_p=attention_dropout_p,
         )
 
-        # Fresh Backbone, overwriting the previous backbone
-        self.config_gpt = GPTConfig(
-            n_layer=num_layers,
-        )
-        model = GPT(self.config_gpt)
+        if not use_comma_gpt:
+            # Fresh Backbone, overwriting the previous backbone
+            self.config_gpt = GPTConfig(
+                n_layer=num_layers,
+            )
+            model = GPT(self.config_gpt)
 
-        self.model = model.to(dtype=DEFAULT_DATATYPE)
+            self.model = model.to(dtype=DEFAULT_DATATYPE)
+        else:
+            assert num_layers == 24, "Comma GPT is 24 layers"
 
         # Freeze the entire model initially
         self.freeze_vqvae()
         self.freeze_gpt(requires_grad=True)
-        
-        # Then unfreeze only the specified number of GPT layers
-        # self.unfreeze_last_n_layers(num_unfrozen_layers)
     
     def quantize(self, x: torch.Tensor):
         """
@@ -276,7 +278,7 @@ if __name__ == "__main__":
     img_3 = torch.tensor(img_3.transpose(2, 0, 1)).float()
     
     # Input Images: 2xRGB (0-255)
-    B, T, C = 8, 2, 3
+    B, T, C = 2, 2, 3
     x = torch.zeros((B, T, C, H, W), requires_grad=True)
     
     # Put the images into x
@@ -289,8 +291,10 @@ if __name__ == "__main__":
     # Put the third image into y
     y.data[0, 0] = img_3
     
-    model = D3NavIDD()
-    model.unfreeze_last_n_layers(num_layers=1)
+    model = D3NavIDD(
+        use_comma_gpt=True,
+        num_layers=24,
+    )
     model = model.cuda()
 
     print("x", x.shape, x.dtype, (x.min(), x.max()))
